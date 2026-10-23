@@ -18,7 +18,7 @@ config:
 
 variables:
     donor_contact_id: mutable string = ""
-        description: "Salesforce ID of the donor currently being discussed, set by Find Donor. Lets follow-up questions about the same donor skip the lookup."
+        description: "Salesforce ID of the donor currently being discussed, set by Find Donor. Shown in the instructions so follow-up questions about the same donor can skip the lookup."
     donor_name: mutable string = ""
         description: "Full name of the donor currently being discussed."
 
@@ -44,31 +44,36 @@ start_agent agent_router:
 
 subagent DonorBriefing:
     label: "Donor Briefing"
-    description: "Handles pre-meeting briefings and questions about one donor: giving history (total, last gift, frequency, trend), last engagement and open tasks, lapse-risk score with its explanation, and the suggested ask amount with its reasoning."
+    description: "Handles pre-meeting briefings and questions about one donor: giving history (total, last gift, frequency, trend), last engagement and open tasks, lapse-risk score with its explanation, the suggested ask amount with its reasoning, and what the donor's meeting notes, call notes and grant reports say."
     reasoning:
         instructions: ->
             |Current donor: {!@variables.donor_name} (Contact ID {!@variables.donor_contact_id}).
-             1. When the officer names a donor, call {!@actions.Find_Donor} with the name exactly as they said it, without asking for permission, even if it looks like the current donor.
+             1. When the officer names a donor, first call {!@actions.Find_Donor} on its own with the name exactly as they said it, without asking for permission, and wait for its result before calling any other action. Do this even if the name looks like the current donor.
                 If Found is false, repeat its Message (it lists the candidates when several donors match) and ask which one they mean. Never guess a donor.
-             2. For a briefing on the found donor, call {!@actions.Get_Donor_Briefing} and {!@actions.Get_Donor_Engagements}. For a follow-up question about the current donor (for example "what is her lapse risk?"), call only the action that answers it. Never describe a donor without calling an action in this turn.
+                Pass the Contact ID returned by Find_Donor to the other actions. For follow-up questions about the current donor, use the current donor's Contact ID shown above. Never reuse an ID from a different donor.
+             2. For a briefing on the found donor, call {!@actions.Get_Donor_Briefing}, {!@actions.Get_Donor_Engagements} and {!@actions.Get_Donor_Notes}. For a follow-up question about the current donor (for example "what is her lapse risk?" or "what did she say about her estate?"), call only the action that answers it. Never describe a donor without calling an action in this turn.
              3. If Get_Donor_Briefing returns an Error Message, say it plainly and stop.
              4. Present a full briefing in this order, one short line or a few bullets per section:
                 **Giving history**: total given and number of gifts, last gift (amount and date), gifts per year and trend, using the Briefing Summary.
                 **Engagement**: last engagement (subject and date), then the open tasks. Lead with overdue tasks and say clearly that they are overdue. If there are no open tasks, say so.
                 **Lapse risk**: the score out of 100, the band, and the Lapse Risk Explanation.
                 **Suggested ask**: the amount (add "per month" when the Suggested Ask Frequency is Monthly) and the Suggested Ask Reasoning. If there is no amount, give the reasoning instead.
-                **Context from notes**: say that note search is not connected yet.
-             5. End with one line: the single most important thing to raise or settle in the meeting, taken only from the facts above (for example an overdue task, or a High lapse risk).
+                **Context from notes**: two or three bullets with what matters for this meeting from the notes: interests, commitments, sensitivities and personal details the officer should remember. Give each bullet its note date. Use only what the notes say; never embellish or infer feelings. If there are no notes, say so.
+             5. End with one line: the single most important thing to raise or settle in the meeting, taken only from the facts above (for example an overdue task, a High lapse risk, or a sensitivity recorded in the notes).
              6. Address the donor as their Preferred Name when the briefing returns one.
+             7. Write the whole reply in the language of the officer's latest message (English, German, French or Italian), even though the actions return English. Translate the section titles and the explanations naturally, but keep names, amounts, dates and task subjects exactly as returned.
         actions:
             Find_Donor: @actions.Find_Donor
                 with donorName = ...
                 set @variables.donor_contact_id = @outputs.contactId
                 set @variables.donor_name = @outputs.donorName
             Get_Donor_Briefing: @actions.Get_Donor_Briefing
-                with contactId = @variables.donor_contact_id
+                with contactId = ...
             Get_Donor_Engagements: @actions.Get_Donor_Engagements
-                with contactId = @variables.donor_contact_id
+                with contactId = ...
+            Get_Donor_Notes: @actions.Get_Donor_Notes
+                with contactId = ...
+                with maxNotes = ...
 
     actions:
         Find_Donor:
@@ -273,6 +278,46 @@ subagent DonorBriefing:
                     is_displayable: False
                     filter_from_agent: False
                     complex_data_type_name: "lightning__dateType"
+
+        Get_Donor_Notes:
+            description: |
+                Returns the donor's most recent notes (meeting notes, call notes, grant reports), newest first, each with its date, type and subject.
+            label: "Get Donor Notes"
+            require_user_confirmation: False
+            include_in_progress_indicator: True
+            progress_indicator_message: "Reading donor notes"
+            target: "apex://GetDonorNotesAction"
+
+            inputs:
+                "contactId": object
+                    description: |
+                      Salesforce ID of the donor Contact, from Find Donor
+                    label: "Donor Contact ID"
+                    is_required: True
+                    is_user_input: False
+                    complex_data_type_name: "lightning__recordIdType"
+                "maxNotes": object
+                    description: |
+                      Optional. How many recent notes to return. Leave empty for the default of 5
+                    label: "Max Notes"
+                    is_required: False
+                    is_user_input: False
+                    complex_data_type_name: "lightning__integerType"
+
+            outputs:
+                "notes": string
+                    description: |
+                      One block per note, newest first: [date · type] subject, then the note text
+                    label: "Notes"
+                    is_displayable: False
+                    filter_from_agent: False
+                "noteCount": object
+                    description: |
+                      Number of notes returned
+                    label: "Note Count"
+                    is_displayable: False
+                    filter_from_agent: False
+                    complex_data_type_name: "lightning__integerType"
 
 subagent off_topic:
     label: "Off Topic"

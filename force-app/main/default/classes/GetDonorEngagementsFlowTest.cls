@@ -65,4 +65,22 @@ private class GetDonorEngagementsFlowTest {
         Assert.isNull(out.get('lastEngagementSubject'));
         Assert.isNull(out.get('lastEngagementDate'));
     }
+
+    @IsTest
+    static void blankContactIdNeverReturnsUnrelatedTasks() {
+        // A task with no contact (e.g. an internal to-do) must not leak when the ID is missing.
+        insert new Task(Subject = 'Internal to-do', Status = 'Not Started', ActivityDate = Date.today().addDays(-2));
+        insert new Task(Subject = 'Internal done', Status = 'Completed', ActivityDate = Date.today().addDays(-5));
+
+        for (Object blank : new List<Object>{ null, '' }) {
+            Flow.Interview interview = Flow.Interview.createInterview(
+                'Get_Donor_Engagements',
+                new Map<String, Object>{ 'contactId' => blank }
+            );
+            interview.start();
+            Assert.areEqual(0, (Decimal) interview.getVariableValue('openTaskCount'), 'blank=' + blank);
+            Assert.isTrue(String.isBlank((String) interview.getVariableValue('openTasksSummary')));
+            Assert.isNull(interview.getVariableValue('lastEngagementSubject'), 'blank=' + blank);
+        }
+    }
 }

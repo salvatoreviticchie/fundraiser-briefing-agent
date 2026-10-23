@@ -76,6 +76,36 @@
         </assignmentItems>
     </assignments>
     <decisions>
+        <description>Guard: with a blank contactId, WhoId = blank would match every task that has no contact. Return empty results instead.</description>
+        <name>Has_Contact_Id</name>
+        <label>Has Contact ID?</label>
+        <locationX>176</locationX>
+        <locationY>26</locationY>
+        <defaultConnectorLabel>Blank</defaultConnectorLabel>
+        <rules>
+            <name>Contact_Id_Provided</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>contactId</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <conditions>
+                <leftValueReference>contactId</leftValueReference>
+                <operator>NotEqualTo</operator>
+                <rightValue>
+                    <stringValue></stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Get_Open_Tasks</targetReference>
+            </connector>
+            <label>Contact ID provided</label>
+        </rules>
+    </decisions>
+    <decisions>
         <name>Has_Last_Engagement</name>
         <label>Has Last Engagement?</label>
         <locationX>176</locationX>
@@ -213,7 +243,7 @@
         <locationX>50</locationX>
         <locationY>0</locationY>
         <connector>
-            <targetReference>Get_Open_Tasks</targetReference>
+            <targetReference>Has_Contact_Id</targetReference>
         </connector>
     </start>
     <status>Active</status>

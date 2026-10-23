@@ -1,15 +1,25 @@
 # Data 360 retriever over donor notes
 
-This is the one part of the project that isn't deployed from source. Data streams, search indexes
-and retrievers are configured in Setup. This guide makes those manual steps repeatable.
+This is the one part of the project that isn't fully deployed from source.
+
+| Step | How | Status in the demo org |
+| --- | --- | --- |
+| 1. Data stream (CRM → data lake) | **Scripted**: `python3 scripts/setup_data360.py <org>` | ✅ `Donor_Note_c_Home` → `Donor_Note_c_Home__dll`, 70 rows |
+| 2. Data model object + mapping | **Scripted** (same command) | ✅ `Donor_Note__dlm`, 70 rows |
+| 3. Search index | Setup (manual): the API failed server-side, see below | ⏳ |
+| 4. Retriever | Setup (manual) | ⏳ |
+| 5. Attach to the agent | CLI (`sf agent adl create`) + one agent action | ⏳ |
+
+Steps 1–2 are idempotent API calls, so re-running the script is safe. The manual steps below are written so they can be
+repeated exactly.
 
 **Goal:** when a gift officer asks about a donor, the agent retrieves the most relevant passages from that
 donor's `Donor_Note__c` records (meeting notes, call notes, grant reports) and grounds its answer in them.
 
 ```mermaid
 flowchart LR
-    N[(Donor_Note__c<br/>CRM)] -->|CRM connector<br/>data stream| DLO[Data lake object<br/>Donor_Note__c_Home]
-    DLO -->|mapping| DMO[Data model object<br/>Donor Note]
+    N[(Donor_Note__c<br/>CRM)] -->|CRM connector<br/>data stream| DLO[Data lake object<br/>Donor_Note_c_Home__dll]
+    DLO -->|mapping| DMO[Data model object<br/>Donor_Note__dlm]
     DMO -->|chunk Body__c + embed| IDX[Search index<br/>vector]
     IDX --> RET[Retriever<br/>filter: donor]
     RET --> AG[Agentforce agent<br/>via Data Library]
@@ -37,46 +47,64 @@ sf data query -q "SELECT Field FROM FieldPermissions WHERE Parent.Name = 'sfdc_a
 If `Body__c` is missing, add Read access to the object and its fields in that permission set. Without it, the
 stream silently ingests empty note bodies.
 
-## 1. Create the data stream (CRM → data lake)
+## 1–2. Data stream, data model object and mapping (scripted)
 
-1. **Data Cloud app → Data Streams → New → Salesforce CRM.**
-2. Choose **Custom Objects** → `Donor_Note__c` → Next.
-3. Category: **Other**. (Engagement would require an event-time field and adds nothing for search.)
-   Primary key: `Id`.
-4. Fields: `Id`, `Name`, `Contact__c`, `Note_Type__c`, `Note_Date__c`, `Body__c`, `Lakeside_Id__c`,
-   `LastModifiedDate`.
-5. Data space: `default` → **Deploy**.
+```bash
+python3 scripts/setup_data360.py agentforce-dev
+```
 
-Result: a data lake object `Donor_Note__c_Home`. Wait for the first refresh to finish, then check the record
-count is **70** (the demo data).
+What it does, through the Data 360 Connect API (`/services/data/v65.0/ssot/...`):
 
-## 2. Map to a data model object
+1. `POST /data-streams`: a Salesforce CRM stream on `Donor_Note__c`, category **Other** (Engagement would require
+   an event date-time field and adds nothing for search), primary key `Id`.
+2. `POST /data-model-objects`: a custom DMO `Donor_Note__dlm`. There's no standard "note" DMO that fits, and linking to
+   the Individual DMO is only needed if notes should appear in unified profiles or segments.
+3. `POST /data-model-object-mappings`: maps each field one-to-one. CRM `Body__c` becomes `Body_c` in the data lake
+   and `Body_c__c` in the DMO. `Contact__c` becomes `Contact_c__c`.
+4. `POST /data-streams/Donor_Note_c_Home/actions/run`: requests a refresh. The first ingestion took under an hour
+   in the demo org. After that, CRM streams refresh on their batch schedule.
 
-1. On the stream, open **Data Mapping → Start**.
-2. **New Custom Object** → name `Donor Note`. Map every field one-to-one, keeping `Id` as the primary key.
-3. Save.
+Verify:
 
-Why a custom DMO rather than a standard one: there's no standard "note" DMO that fits, and the index and
-retriever only need this one object. Linking it to the Individual DMO is only needed if you later want notes
-in unified profiles, segments or calculated insights.
+```bash
+echo '{"sql":"SELECT COUNT(*) AS n FROM Donor_Note__dlm"}' > /tmp/q.json
+sf api request rest /services/data/v65.0/ssot/query --method POST --body @/tmp/q.json -o agentforce-dev
+```
 
 ## 3. Create the search index (chunk + embed)
 
 1. **Data Cloud app → Search Index → New → Vector Search → Advanced Setup.**
-2. Object: **Donor Note** (DMO).
-3. **Chunking:** field `Body__c`, passage/sentence-based chunking with the default chunk size.
+2. Object: **Donor Note** (`Donor_Note__dlm`).
+3. **Chunking:** field `Body_c__c` (the note body), **Passage Extraction**, max 512 tokens.
    The notes are short, so most become a single chunk, and that's fine.
-4. **Embedding model:** a multilingual E5 model if offered. Lakeside's donors write in German,
-   French and Italian as well as English.
-5. **Fields to include (metadata / prefilters):** `Contact__c`, `Note_Type__c`, `Note_Date__c`, `Name`.
-   `Contact__c` is the important one: it lets the retriever return *only this donor's* notes.
+4. **Embedding model:** **Multilingual E5 Large** (`multilingual-e5-large`, available in the demo org). Lakeside's
+   donors write in German, French and Italian as well as English.
+5. **Fields to include (metadata / prefilters):** `Contact_c__c`, `Note_Type_c__c`, `Note_Date_c__c`, `Name__c`.
+   `Contact_c__c` is the important one: it lets the retriever return *only this donor's* notes.
+
+> **Why not the API?** `POST /ssot/search-index` validates the request shape (`developerName`, `sourceDmoDeveloperName`,
+> chunk and vector DMO names, `chunkingConfiguration.fieldLevelConfigurations[].sourceDmoFieldName` and `.config.id`,
+> `vectorEmbeddingConfiguration.embeddingModel.id`) but then returns `UNKNOWN_EXCEPTION`, with or without data in the
+> DMO. Creating the index in the UI and reading it back with `GET /ssot/search-index` would show the missing piece.
+> The last request tried:
+>
+> ```json
+> {"developerName": "Donor_Notes_Index", "label": "Donor Notes Index",
+>  "sourceDmoDeveloperName": "Donor_Note__dlm",
+>  "chunkDmoName": "Donor Notes Index Chunk", "chunkDmoDeveloperName": "Donor_Notes_Index_chunk",
+>  "vectorDmoName": "Donor Notes Index Vector", "vectorDmoDeveloperName": "Donor_Notes_Index_vector",
+>  "vectorEmbeddingConfiguration": {"embeddingModel": {"id": "multilingual-e5-large"}},
+>  "chunkingConfiguration": {"fieldLevelConfigurations": [
+>    {"sourceDmoFieldName": "Body_c__c", "config": {"id": "passage_extraction",
+>     "userValues": [{"id": "max_tokens", "value": "512"}]}}]}}
+> ```
 6. Name it `Donor_Notes_Index` → **Save**, then wait until the status is **Ready**.
 
 ## 4. Create the retriever
 
 1. **Einstein Studio → Retrievers → New Retriever → Data Cloud.**
 2. Data space `default`, object **Donor Note**, index `Donor_Notes_Index`.
-3. **Filter:** `Contact__c` **equals** a *dynamic* value supplied at runtime (the donor's Contact ID).
+3. **Filter:** `Contact_c__c` **equals** a *dynamic* value supplied at runtime (the donor's Contact ID).
    If your release only offers static filters, leave the filter off. The agent then includes the
    donor's name in the search query instead, which works but is less precise (see trade-offs).
 4. **Results:** 5 results. Return the chunk text plus `Name`, `Note_Type__c`, `Note_Date__c`.
@@ -96,15 +124,21 @@ Other good probes against the demo data:
 | "frustrated, not kept informed" | Claire Rochat: delayed food bank cold-store |
 | "named fund husband teacher" | Eleanor Hart: lunch at the boathouse |
 
-## 6. Connect it to the agent (Phase 5)
+## 6. Connect it to the agent
 
-Wrap the retriever in an Agentforce Data Library from the CLI, so the agent can use it as a knowledge source:
+The agent already includes **recent** notes through `GetDonorNotesAction` (CRM, real time). The retriever adds
+**semantic** search across all of a donor's notes. Wrap it in an Agentforce Data Library from the CLI:
 
 ```bash
 sf agent adl create -o agentforce-dev \
   -n "Donor Notes" --developer-name Donor_Notes \
   --source-type retriever --retriever-id <retriever ID from Einstein Studio>
 ```
+
+Then, in Agent Builder, add the data library to the **Donor Briefing** subagent. Instruct the agent to use it for
+open questions ("anything about legacy giving?") and to keep `Get_Donor_Notes` for the briefing itself. Retrieve the
+updated authoring bundle (`sf project retrieve start -m AiAuthoringBundle:Fundraiser_Briefing_Agent`) so the change
+is in source control.
 
 ## Trade-offs
 
@@ -116,7 +150,8 @@ sf agent adl create -o agentforce-dev \
   filter as a requirement rather than a nice-to-have, and to only call the retriever for a donor the user
   can already open. In Phase 5 the agent calls the Apex briefing action, which checks access in user mode, before it calls the retriever.
 - **Freshness:** CRM data streams refresh on a schedule, not in real time. A note typed five minutes before a
-  meeting may not be searchable yet. The structured parts of the briefing (Apex + Flow) are always live.
+  meeting may not be searchable yet. That's why the briefing reads recent notes from CRM directly, and the
+  structured parts (Apex + Flow) are always live.
 - **Cost:** ingestion, indexing and retrieval consume Data 360 credits. At 70 short notes this is negligible,
   but at production volumes it's a real line item.
 
