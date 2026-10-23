@@ -1,0 +1,16 @@
+{
+  "name": "fundraiser-briefing-agent",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Agentforce agent that prepares major-gifts officers for donor meetings (fictional nonprofit, fake data).",
+  "license": "MIT",
+  "scripts": {
+    "prettier": "prettier --write \"**/*.{cls,trigger,json,md,xml,yaml,yml}\"",
+    "prettier:verify": "prettier --check \"**/*.{cls,trigger,json,md,xml,yaml,yml}\""
+  },
+  "devDependencies": {
+    "@prettier/plugin-xml": "^3.4.1",
+    "prettier": "^3.5.3",
+    "prettier-plugin-apex": "^2.2.6"
+  }
+}

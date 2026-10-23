@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# Secrets & org credentials: never commit these
+# ---------------------------------------------------------------------------
+# sf CLI local state (contains org metadata cache and can reference auth)
+.sf/
+.sfdx/
+# Auth URLs exported with `sf org display --verbose` / `sf org login sfdx-url`
+*authUrl*
+*auth-url*
+sfdxAuthUrl*
+# JWT / connected-app keys and certificates
+*.key
+*.pem
+*.crt
+*.p12
+*.jks
+server.key
+# Environment files (allow a committed template only)
+.env
+.env.*
+!.env.example
+# Deploy options that sometimes embed usernames
+deploy-options.json
+
+# ---------------------------------------------------------------------------
+# Salesforce tooling
+# ---------------------------------------------------------------------------
+.localdevserver/
+.pmdCache
+**/lwc/jsconfig.json
+# Apex test results / coverage output from `sf apex run test -d`
+test-results/
+coverage/
+
+# ---------------------------------------------------------------------------
+# Python (data generator)
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+# Generated CSVs are reproducible from the script; regenerate instead of committing
+data-generator/output/
+
+# ---------------------------------------------------------------------------
+# Node (Prettier only)
+# ---------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+.eslintcache
+
+# ---------------------------------------------------------------------------
+# OS / editor noise
+# ---------------------------------------------------------------------------
+logs
+*.log
+.DS_Store
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini
+$RECYCLE.BIN/
+.idea/
