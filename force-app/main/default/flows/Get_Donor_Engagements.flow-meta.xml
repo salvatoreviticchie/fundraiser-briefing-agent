@@ -1,6 +1,30 @@
-<?xml version="1.0" encoding="UTF-8" ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <Flow xmlns="http://soap.sforce.com/2006/04/metadata">
     <apiVersion>65.0</apiVersion>
+    <areMetricsLoggedToDataCloud>false</areMetricsLoggedToDataCloud>
+    <assignments>
+        <name>Add_Open_Task</name>
+        <label>Add Open Task</label>
+        <locationX>396</locationX>
+        <locationY>566</locationY>
+        <assignmentItems>
+            <assignToReference>openTasksSummary</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <elementReference>SummaryPlusOpenTask</elementReference>
+            </value>
+        </assignmentItems>
+        <assignmentItems>
+            <assignToReference>openTaskCount</assignToReference>
+            <operator>Add</operator>
+            <value>
+                <numberValue>1.0</numberValue>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference>Each_Open_Task</targetReference>
+        </connector>
+    </assignments>
     <assignments>
         <name>Add_Overdue_Task</name>
         <label>Add Overdue Task</label>
@@ -18,29 +42,6 @@
             <operator>Add</operator>
             <value>
                 <numberValue>1.0</numberValue>
-            </value>
-        </assignmentItems>
-        <assignmentItems>
-            <assignToReference>openTaskCount</assignToReference>
-            <operator>Add</operator>
-            <value>
-                <numberValue>1.0</numberValue>
-            </value>
-        </assignmentItems>
-        <connector>
-            <targetReference>Each_Open_Task</targetReference>
-        </connector>
-    </assignments>
-    <assignments>
-        <name>Add_Open_Task</name>
-        <label>Add Open Task</label>
-        <locationX>396</locationX>
-        <locationY>566</locationY>
-        <assignmentItems>
-            <assignToReference>openTasksSummary</assignToReference>
-            <operator>Assign</operator>
-            <value>
-                <elementReference>SummaryPlusOpenTask</elementReference>
             </value>
         </assignmentItems>
         <assignmentItems>
@@ -75,6 +76,28 @@
         </assignmentItems>
     </assignments>
     <decisions>
+        <name>Has_Last_Engagement</name>
+        <label>Has Last Engagement?</label>
+        <locationX>176</locationX>
+        <locationY>758</locationY>
+        <defaultConnectorLabel>None</defaultConnectorLabel>
+        <rules>
+            <name>Found</name>
+            <conditionLogic>and</conditionLogic>
+            <conditions>
+                <leftValueReference>Get_Last_Engagement</leftValueReference>
+                <operator>IsNull</operator>
+                <rightValue>
+                    <booleanValue>false</booleanValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Set_Last_Engagement</targetReference>
+            </connector>
+            <label>Found</label>
+        </rules>
+    </decisions>
+    <decisions>
         <name>Is_Overdue</name>
         <label>Is Overdue?</label>
         <locationX>264</locationX>
@@ -99,29 +122,7 @@
             <label>Overdue</label>
         </rules>
     </decisions>
-    <decisions>
-        <name>Has_Last_Engagement</name>
-        <label>Has Last Engagement?</label>
-        <locationX>176</locationX>
-        <locationY>758</locationY>
-        <defaultConnectorLabel>None</defaultConnectorLabel>
-        <rules>
-            <name>Found</name>
-            <conditionLogic>and</conditionLogic>
-            <conditions>
-                <leftValueReference>Get_Last_Engagement</leftValueReference>
-                <operator>IsNull</operator>
-                <rightValue>
-                    <booleanValue>false</booleanValue>
-                </rightValue>
-            </conditions>
-            <connector>
-                <targetReference>Set_Last_Engagement</targetReference>
-            </connector>
-            <label>Found</label>
-        </rules>
-    </decisions>
-    <description>Agentforce action: returns a donor's open tasks (flagging overdue ones) and their most recent completed engagement, as agent-ready text plus counts.</description>
+    <description>Agentforce action: returns a donor&apos;s open tasks (flagging overdue ones) and their most recent completed engagement, as agent-ready text plus counts.</description>
     <environments>Default</environments>
     <interviewLabel>Get Donor Engagements {!$Flow.CurrentDateTime}</interviewLabel>
     <label>Get Donor Engagements</label>
@@ -140,6 +141,39 @@
         </noMoreValuesConnector>
     </loops>
     <processType>AutoLaunchedFlow</processType>
+    <recordLookups>
+        <name>Get_Last_Engagement</name>
+        <label>Get Last Engagement</label>
+        <locationX>176</locationX>
+        <locationY>242</locationY>
+        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
+        <connector>
+            <targetReference>Each_Open_Task</targetReference>
+        </connector>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>WhoId</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>contactId</elementReference>
+            </value>
+        </filters>
+        <filters>
+            <field>IsClosed</field>
+            <operator>EqualTo</operator>
+            <value>
+                <booleanValue>true</booleanValue>
+            </value>
+        </filters>
+        <getFirstRecordOnly>true</getFirstRecordOnly>
+        <object>Task</object>
+        <queriedFields>Id</queriedFields>
+        <queriedFields>Subject</queriedFields>
+        <queriedFields>ActivityDate</queriedFields>
+        <sortField>ActivityDate</sortField>
+        <sortOrder>Desc</sortOrder>
+        <storeOutputAutomatically>true</storeOutputAutomatically>
+    </recordLookups>
     <recordLookups>
         <name>Get_Open_Tasks</name>
         <label>Get Open Tasks</label>
@@ -174,39 +208,6 @@
         <sortOrder>Asc</sortOrder>
         <storeOutputAutomatically>true</storeOutputAutomatically>
     </recordLookups>
-    <recordLookups>
-        <name>Get_Last_Engagement</name>
-        <label>Get Last Engagement</label>
-        <locationX>176</locationX>
-        <locationY>242</locationY>
-        <assignNullValuesIfNoRecordsFound>false</assignNullValuesIfNoRecordsFound>
-        <connector>
-            <targetReference>Each_Open_Task</targetReference>
-        </connector>
-        <filterLogic>and</filterLogic>
-        <filters>
-            <field>WhoId</field>
-            <operator>EqualTo</operator>
-            <value>
-                <elementReference>contactId</elementReference>
-            </value>
-        </filters>
-        <filters>
-            <field>IsClosed</field>
-            <operator>EqualTo</operator>
-            <value>
-                <booleanValue>true</booleanValue>
-            </value>
-        </filters>
-        <getFirstRecordOnly>true</getFirstRecordOnly>
-        <object>Task</object>
-        <queriedFields>Id</queriedFields>
-        <queriedFields>Subject</queriedFields>
-        <queriedFields>ActivityDate</queriedFields>
-        <sortField>ActivityDate</sortField>
-        <sortOrder>Desc</sortOrder>
-        <storeOutputAutomatically>true</storeOutputAutomatically>
-    </recordLookups>
     <runInMode>SystemModeWithSharing</runInMode>
     <start>
         <locationX>50</locationX>
@@ -217,18 +218,18 @@
     </start>
     <status>Active</status>
     <textTemplates>
-        <description>Summary so far plus one overdue task. The line break sits between the two parts because Flow trims trailing whitespace from text templates.</description>
-        <name>SummaryPlusOverdueTask</name>
-        <isViewedAsPlainText>true</isViewedAsPlainText>
-        <text>{!openTasksSummary}
-- OVERDUE (due {!Each_Open_Task.ActivityDate}): {!Each_Open_Task.Subject} [{!Each_Open_Task.Priority} priority]</text>
-    </textTemplates>
-    <textTemplates>
         <description>Summary so far plus one open task that is not overdue.</description>
         <name>SummaryPlusOpenTask</name>
         <isViewedAsPlainText>true</isViewedAsPlainText>
         <text>{!openTasksSummary}
 - Due {!Each_Open_Task.ActivityDate}: {!Each_Open_Task.Subject} [{!Each_Open_Task.Priority} priority]</text>
+    </textTemplates>
+    <textTemplates>
+        <description>Summary so far plus one overdue task. The line break sits between the two parts because Flow trims trailing whitespace from text templates.</description>
+        <name>SummaryPlusOverdueTask</name>
+        <isViewedAsPlainText>true</isViewedAsPlainText>
+        <text>{!openTasksSummary}
+- OVERDUE (due {!Each_Open_Task.ActivityDate}): {!Each_Open_Task.Subject} [{!Each_Open_Task.Priority} priority]</text>
     </textTemplates>
     <variables>
         <description>Salesforce ID of the donor Contact.</description>
@@ -239,8 +240,16 @@
         <isOutput>false</isOutput>
     </variables>
     <variables>
-        <description>One line per open task, overdue tasks first and marked OVERDUE. Blank when there are no open tasks.</description>
-        <name>openTasksSummary</name>
+        <description>Date of the most recent completed task. Blank if none.</description>
+        <name>lastEngagementDate</name>
+        <dataType>Date</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>true</isOutput>
+    </variables>
+    <variables>
+        <description>Subject of the most recent completed task (the last engagement). Blank if none.</description>
+        <name>lastEngagementSubject</name>
         <dataType>String</dataType>
         <isCollection>false</isCollection>
         <isInput>false</isInput>
@@ -259,6 +268,14 @@
         </value>
     </variables>
     <variables>
+        <description>One line per open task, overdue tasks first and marked OVERDUE. Blank when there are no open tasks.</description>
+        <name>openTasksSummary</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+        <isInput>false</isInput>
+        <isOutput>true</isOutput>
+    </variables>
+    <variables>
         <description>Number of open tasks whose due date has passed.</description>
         <name>overdueTaskCount</name>
         <dataType>Number</dataType>
@@ -269,21 +286,5 @@
         <value>
             <numberValue>0.0</numberValue>
         </value>
-    </variables>
-    <variables>
-        <description>Subject of the most recent completed task (the last engagement). Blank if none.</description>
-        <name>lastEngagementSubject</name>
-        <dataType>String</dataType>
-        <isCollection>false</isCollection>
-        <isInput>false</isInput>
-        <isOutput>true</isOutput>
-    </variables>
-    <variables>
-        <description>Date of the most recent completed task. Blank if none.</description>
-        <name>lastEngagementDate</name>
-        <dataType>Date</dataType>
-        <isCollection>false</isCollection>
-        <isInput>false</isInput>
-        <isOutput>true</isOutput>
     </variables>
 </Flow>

@@ -379,7 +379,7 @@ def build(donor_count: int, as_of: date, seed: int) -> dict:
 
         files["households.csv"].append({
             "Lakeside_Id__c": household_id,
-            "Name": f"{donor['last']} Household ({donor['first']})",
+            "Name": f"{donor['last']} Household",
             "BillingCity": donor["city"],
             "BillingCountry": "Switzerland",
         })

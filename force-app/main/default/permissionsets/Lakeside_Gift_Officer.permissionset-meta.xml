@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <PermissionSet xmlns="http://soap.sforce.com/2006/04/metadata">
     <label>Lakeside Gift Officer</label>
-    <description>Least-privilege access for major-gifts officers using the Fundraiser Briefing Agent: run the briefing action, read giving fields, read and write donor notes.</description>
+    <description>Least-privilege access for major-gifts officers using the Fundraiser Briefing Agent: use the agent and run its actions (find donor, briefing, engagements), read giving fields, read and write donor notes.</description>
     <hasActivationRequired>false</hasActivationRequired>
+    <agentAccesses>
+        <agentName>Fundraiser_Briefing_Agent</agentName>
+        <enabled>true</enabled>
+    </agentAccesses>
     <classAccesses>
         <apexClass>DonorBriefingService</apexClass>
+        <enabled>true</enabled>
+    </classAccesses>
+    <classAccesses>
+        <apexClass>FindDonorAction</apexClass>
         <enabled>true</enabled>
     </classAccesses>
     <fieldPermissions>
@@ -47,6 +55,10 @@
         <field>Opportunity.Gift_Type__c</field>
         <readable>true</readable>
     </fieldPermissions>
+    <flowAccesses>
+        <enabled>true</enabled>
+        <flow>Get_Donor_Engagements</flow>
+    </flowAccesses>
     <objectPermissions>
         <allowCreate>false</allowCreate>
         <allowDelete>false</allowDelete>
