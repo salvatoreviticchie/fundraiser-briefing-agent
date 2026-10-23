@@ -4,7 +4,7 @@
 > Built for **Lakeside Community Trust**, a fictional Swiss nonprofit. All donors, gifts and notes are synthetic.
 > Amounts are in **CHF**.
 
-**Status:** 🚧 Phase 2 of 5 (data model + scoring service). Sections marked _TODO_ are filled in as each phase lands.
+**Status:** 🚧 Phase 3 of 5 (data model, scoring service, demo data). Sections marked _TODO_ are filled in as each phase lands.
 
 ---
 
@@ -115,11 +115,28 @@ enabled, and Python 3.10 or later.
    - In Setup → Company Information, set **Currency Locale** to a Swiss locale (CHF).
      The org is single-currency, so `Opportunity.Amount` is stored in CHF.
 2. Deploy metadata: `sf project deploy start -o lakeside-dev`
-3. Assign the permission set to each gift officer (and to yourself):
-   `sf org assign permset -n Lakeside_Gift_Officer -o lakeside-dev`
-4. Generate and import data: _TODO_
+3. Assign permission sets. Gift officers get `Lakeside_Gift_Officer`; whoever loads data also gets `Lakeside_Data_Admin`:
+   `sf org assign permset -n Lakeside_Gift_Officer -n Lakeside_Data_Admin -o lakeside-dev`
+4. Generate and import demo data (about 430 records, around 0.8 MB of the 5 MB Developer Edition allowance):
+   ```bash
+   python3 data-generator/generate_data.py          # writes CSVs to data-generator/output/
+   scripts/import-demo-data.sh lakeside-dev         # Bulk API upserts, safe to re-run
+   ```
+   Remove it again with `sf apex run -o lakeside-dev -f scripts/apex/delete-demo-data.apex`.
 5. Configure the Data 360 retriever: see `docs/data-360-retriever-setup.md` (_TODO_)
 6. Activate the agent and try: _"Prep me for my meeting with …"_
+
+### Demo data
+
+`data-generator/generate_data.py` (standard library only) builds households, donors, gifts, notes and tasks from
+**donor archetypes**: loyal monthly, lapsing monthly, growing annual, steady annual, declining, lapsed, new,
+prospect and major grant. That way the data exercises every branch of the scoring. Three hand-written "hero"
+donors (Eleanor Hart, Marco Bernasconi, Claire Rochat) have rich notes for the demo script. Output is
+reproducible: the same `--seed` and `--as-of` give identical files.
+
+Import uses external IDs (`Lakeside_Id__c`) so it is idempotent. `Opportunity.ContactId` and `Task.WhoId` have no
+relationship name the Bulk API can resolve, so `resolve_ids.py` swaps in Contact IDs after Contacts load,
+the same "VLOOKUP" step as a Data Loader migration.
 
 ## 7. Design decisions & trade-offs
 
@@ -143,6 +160,11 @@ _TODO: expand each into a short ADR-style entry._
   narrates; it never calculates.
 - **User mode everywhere:** queries run `WITH USER_MODE` (CRUD + FLS enforced). Integration tests run as a
   *Minimum Access* user who has only `Lakeside_Gift_Officer`, which proves the permission set is sufficient on its own.
+- **Standard `ContactId` + an ID-resolution step vs a custom `Donor__c` lookup:** a custom lookup would make CSV
+  imports one-step, but it would duplicate the standard primary-contact field (which also creates the Opportunity Contact Role).
+  The data model stays standard and the import pipeline carries the extra step.
+- **Separate data-admin permission set:** loading data needs edit access to external IDs and capacity ratings, which
+  gift officers shouldn't have. Two permission sets keep the officer persona least-privilege.
 - **Locale-independent formatting:** `CurrencyFormatter` renders `CHF 12'500` the same way for every user locale, so
   test assertions and agent output are stable.
 
