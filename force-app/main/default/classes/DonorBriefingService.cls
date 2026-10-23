@@ -62,6 +62,8 @@ public with sharing class DonorBriefingService {
 
         @InvocableVariable(label='Suggested Ask Amount' description='Recommended amount to ask for. Blank if no history.')
         public Decimal suggestedAskAmount;
+        @InvocableVariable(label='Suggested Ask Frequency' description='One-off, or Monthly for recurring donors.')
+        public String suggestedAskFrequency;
         @InvocableVariable(label='Suggested Ask Reasoning' description='How the suggested ask was calculated.')
         public String suggestedAskReasoning;
 
@@ -98,7 +100,7 @@ public with sharing class DonorBriefingService {
         );
         Map<Id, List<DonorGift>> giftsByContact = new Map<Id, List<DonorGift>>();
         for (Opportunity opp : [
-            SELECT ContactId, Amount, CloseDate
+            SELECT ContactId, Amount, CloseDate, Gift_Type__c
             FROM Opportunity
             WHERE ContactId IN :contacts.keySet() AND IsWon = TRUE AND Amount != NULL
             WITH USER_MODE
@@ -106,7 +108,7 @@ public with sharing class DonorBriefingService {
             if (!giftsByContact.containsKey(opp.ContactId)) {
                 giftsByContact.put(opp.ContactId, new List<DonorGift>());
             }
-            giftsByContact.get(opp.ContactId).add(new DonorGift(opp.Amount, opp.CloseDate));
+            giftsByContact.get(opp.ContactId).add(new DonorGift(opp.Amount, opp.CloseDate, opp.Gift_Type__c));
         }
 
         String currencyCode = UserInfo.getDefaultCurrency();
@@ -159,6 +161,7 @@ public with sharing class DonorBriefingService {
         res.lapseRiskBand = risk.band;
         res.lapseRiskExplanation = risk.explanation;
         res.suggestedAskAmount = ask.amount;
+        res.suggestedAskFrequency = ask.frequency;
         res.suggestedAskReasoning = ask.reasoning;
         res.briefingSummary = formatSummary(res, summary);
         return res;
@@ -205,6 +208,7 @@ public with sharing class DonorBriefingService {
         lines.add(
             'Suggested ask: ' +
             (res.suggestedAskAmount == null ? 'none' : CurrencyFormatter.format(res.suggestedAskAmount, cur)) +
+            (res.suggestedAskFrequency == AskAmountCalculator.FREQUENCY_MONTHLY ? ' per month' : '') +
             '. ' +
             res.suggestedAskReasoning
         );

@@ -124,4 +124,47 @@ private class GivingSummaryTest {
         );
         Assert.areEqual(1, s.averageIntervalDays);
     }
+
+    @IsTest
+    static void countsGivingYearsSinceFirstGift() {
+        GivingSummary everyYear = GivingSummary.fromGifts(TestDataFactory.giftSeries(100, AS_OF, 3, 12), AS_OF);
+        Assert.areEqual(3, everyYear.eligibleGivingYears);
+        Assert.areEqual(3, everyYear.activeGivingYears);
+
+        GivingSummary skippedYear = GivingSummary.fromGifts(
+            new List<DonorGift>{ new DonorGift(100, AS_OF), new DonorGift(100, AS_OF.addMonths(-24)) },
+            AS_OF
+        );
+        Assert.areEqual(3, skippedYear.eligibleGivingYears);
+        Assert.areEqual(2, skippedYear.activeGivingYears);
+
+        GivingSummary newDonor = GivingSummary.fromGifts(new List<DonorGift>{ new DonorGift(100, AS_OF.addMonths(-2)) }, AS_OF);
+        Assert.areEqual(1, newDonor.eligibleGivingYears, 'Years before the first gift do not count');
+        Assert.areEqual(1, newDonor.activeGivingYears);
+
+        GivingSummary none = GivingSummary.fromGifts(new List<DonorGift>(), AS_OF);
+        Assert.areEqual(0, none.eligibleGivingYears);
+    }
+
+    @IsTest
+    static void flagsRecurringDonorFromLatestGift() {
+        GivingSummary recurring = GivingSummary.fromGifts(
+            new List<DonorGift>{
+                new DonorGift(500, AS_OF.addMonths(-20), 'One_off'),
+                new DonorGift(40, AS_OF, DonorGift.TYPE_RECURRING)
+            },
+            AS_OF
+        );
+        Assert.isTrue(recurring.lastGiftRecurring);
+
+        GivingSummary switchedBack = GivingSummary.fromGifts(
+            new List<DonorGift>{
+                new DonorGift(40, AS_OF.addMonths(-3), DonorGift.TYPE_RECURRING),
+                new DonorGift(500, AS_OF)
+            },
+            AS_OF
+        );
+        Assert.isFalse(switchedBack.lastGiftRecurring, 'Untyped gifts are treated as one-off');
+        Assert.isFalse(GivingSummary.fromGifts(null, AS_OF).lastGiftRecurring);
+    }
 }

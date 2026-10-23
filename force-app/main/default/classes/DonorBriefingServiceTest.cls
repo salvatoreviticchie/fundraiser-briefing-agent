@@ -37,6 +37,10 @@ private class DonorBriefingServiceTest {
         insert gifts;
 
         TestDataFactory.createDonorWithHousehold('Tomas', 'Brenner', null);
+
+        // Monthly donor: 12 recurring gifts of 40, the latest on AS_OF.
+        Contact marta = TestDataFactory.createDonorWithHousehold('Marta', 'Frei', 'C');
+        TestDataFactory.createGiftSeries(marta, 40, AS_OF, 12, 1, 'Recurring');
     }
 
     private static User officer() {
@@ -79,19 +83,38 @@ private class DonorBriefingServiceTest {
             Assert.areEqual(GivingSummary.TREND_INCREASING, res.givingTrend);
             Assert.areEqual(25, res.givingTrendPercent);
 
-            // Recency 0 (within annual cadence) + frequency 8 (3 gifts) + monetary 0 (increasing).
-            Assert.areEqual(8, res.lapseRiskScore);
+            // Recency 0 (within annual cadence) + frequency 0 (gave in each of the last 3 years) + monetary 0 (increasing).
+            Assert.areEqual(0, res.lapseRiskScore);
             Assert.areEqual(LapseRiskScorer.BAND_LOW, res.lapseRiskBand);
 
             // (1.5 + 0.1) x 5'000 = 8'000, below the C cap of 25'000.
             Assert.areEqual(8000, res.suggestedAskAmount);
+            Assert.areEqual(AskAmountCalculator.FREQUENCY_ONE_OFF, res.suggestedAskFrequency);
             Assert.isTrue(res.suggestedAskReasoning.contains('bonus for increasing giving'), res.suggestedAskReasoning);
 
             Assert.isTrue(res.briefingSummary.startsWith('Briefing: Eleanor Hart'), res.briefingSummary);
             Assert.isTrue(res.briefingSummary.contains(CurrencyFormatter.format(13000, cur) + ' across 3 gifts since 2024'));
             Assert.isTrue(res.briefingSummary.contains('Trend: Increasing (+25% YoY)'), res.briefingSummary);
-            Assert.isTrue(res.briefingSummary.contains('Lapse risk: 8/100'), res.briefingSummary);
+            Assert.isTrue(res.briefingSummary.contains('Lapse risk: 0/100'), res.briefingSummary);
             Assert.isTrue(res.briefingSummary.contains('Suggested ask: ' + CurrencyFormatter.format(8000, cur)));
+        }
+    }
+
+    @IsTest
+    static void recurringDonorGetsMonthlyAsk() {
+        System.runAs(officer()) {
+            DonorBriefingService.Response res = DonorBriefingService.getBriefings(
+                new List<DonorBriefingService.Request>{ request(donorByLastName('Frei').Id) }
+            )[0];
+
+            Assert.areEqual(12, res.giftCount);
+            Assert.areEqual(LapseRiskScorer.BAND_LOW, res.lapseRiskBand);
+            Assert.areEqual(AskAmountCalculator.FREQUENCY_MONTHLY, res.suggestedAskFrequency, 'Gift_Type__c must reach the scoring');
+            Assert.areEqual(60, res.suggestedAskAmount, '1.5 x 40 per month');
+            Assert.isTrue(
+                res.briefingSummary.contains('Suggested ask: ' + CurrencyFormatter.format(60, res.currencyCode) + ' per month.'),
+                res.briefingSummary
+            );
         }
     }
 

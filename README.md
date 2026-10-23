@@ -81,12 +81,30 @@ The service only fetches data. The logic lives in small pure classes (`GivingSum
 | Factor | Max | Rule |
 | --- | --- | --- |
 | Recency | 50 | Days since last gift **÷ the donor's own typical gap** (last 7 gifts): ≤1.25× → 0, ≤1.5× → 15, ≤2× → 30, ≤3× → 40, more → 50. Single-gift donors use absolute time. Over 2 years is always 50. |
-| Frequency | 25 | Gifts in last 36 months: ≥6 → 0, 3–5 → 8, 2 → 15, 1 → 20, 0 → 25 |
+| Frequency | 25 | **Giving consistency**: of the last three 12-month windows *since the donor's first gift*, how many contain a gift. None missed → 0, 1 missed → 10, 2 missed → 18, no gifts in 3 years → 25. |
 | Monetary | 25 | Last 12 vs prior 12 months: Increasing → 0, Stable/New → 5, Declining → 15 (more than 50% drop → 25), Inactive → 25 |
 
-**Suggested ask** = largest gift in last 3 years × (1.5 Low / 1.2 Medium / 1.0 High, +0.1 if increasing),
-capped by capacity rating (B ≤ CHF 100'000, C ≤ 25'000, D ≤ 5'000), rounded to a natural figure.
-Donors with no gifts get no number, only "open with a discovery conversation".
+Medium/High explanations name the two biggest risk factors. Low explanations lead with what's going well and add a
+`watch:` note only for a factor worth 10 points or more.
+
+**Suggested ask**: the first matching strategy wins.
+
+| # | When | Ask |
+| --- | --- | --- |
+| 1 | No gifts | No amount: "open with a discovery conversation" |
+| 2 | Lapsed more than 2 years | Reactivation at **50% of last gift** |
+| 3 | Latest gift is recurring | **Monthly** ask: current monthly gift × risk multiplier |
+| 4 | Giving declining | Renew at **last 12 months' level**, with no upgrade |
+| 5 | Otherwise | Largest gift in last 3 years × risk multiplier |
+
+Risk multiplier: 1.5 Low (upgrade) / 1.2 Medium / 1.0 High (renewal), +0.1 if giving is increasing. Asks are capped by
+capacity rating on an annual basis (B ≤ CHF 100'000, C ≤ 25'000, D ≤ 5'000; monthly asks × 12) and rounded to a
+natural figure (finer steps for monthly amounts).
+
+**Calibrated against realistic data.** The first version passed every unit test, but on the generated donors it asked a
+declining donor for 2.7× their latest gift, penalised loyal annual donors for "only 3 gifts in 3 years", and gave
+monthly donors one-off asks of CHF 50. Unit tests prove the rules are implemented as written; only realistic data
+shows whether the rules themselves are any good.
 
 ## 5. Repository layout
 
@@ -180,7 +198,7 @@ sf apex run test -o lakeside-dev -l RunLocalTests -c -r human -w 10
 | Integration | `DonorBriefingServiceTest` | Query filters (open opportunities excluded), mapping, error responses, bulk safety (100 requests → 2 queries), least-privilege access |
 
 `TestDataFactory` builds households, donors, gift series ("monthly for 2 years") and notes.
-Current result: **39 tests, 100% coverage** on all production classes.
+Current result: **52 tests, 100% coverage** on all production classes.
 
 ## 9. Limitations & next steps
 

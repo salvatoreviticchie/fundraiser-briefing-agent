@@ -91,19 +91,22 @@ public class TestDataFactory {
     }
 
     /**
-     * Inserts `count` gifts of `amount`, one every `intervalMonths`, ending on `lastGiftDate`.
-     * Handy for "monthly donor", "annual donor" style scenarios.
+     * Inserts `count` gifts of `amount` and `giftType`, one every `intervalMonths`, ending on
+     * `lastGiftDate`. Handy for "monthly donor", "annual donor" style scenarios.
      */
     public static List<Opportunity> createGiftSeries(
         Contact donor,
         Decimal amount,
         Date lastGiftDate,
         Integer count,
-        Integer intervalMonths
+        Integer intervalMonths,
+        String giftType
     ) {
         List<Opportunity> gifts = new List<Opportunity>();
         for (Integer i = 0; i < count; i++) {
-            gifts.add(buildGift(donor, amount, lastGiftDate.addMonths(-i * intervalMonths)));
+            Opportunity gift = buildGift(donor, amount, lastGiftDate.addMonths(-i * intervalMonths));
+            gift.Gift_Type__c = giftType;
+            gifts.add(gift);
         }
         insert gifts;
         return gifts;

@@ -7,12 +7,25 @@
  * means changing the mapping in DonorBriefingService.
  */
 public with sharing class DonorGift implements Comparable {
+    /** API name of the Opportunity.Gift_Type__c value for monthly/recurring gifts. */
+    public static final String TYPE_RECURRING = 'Recurring';
+
     public final Decimal amount;
     public final Date giftDate;
+    public final String giftType;
 
     public DonorGift(Decimal amount, Date giftDate) {
+        this(amount, giftDate, null);
+    }
+
+    public DonorGift(Decimal amount, Date giftDate, String giftType) {
         this.amount = amount;
         this.giftDate = giftDate;
+        this.giftType = giftType;
+    }
+
+    public Boolean isRecurring() {
+        return giftType == TYPE_RECURRING;
     }
 
     /** Sorts oldest first. */

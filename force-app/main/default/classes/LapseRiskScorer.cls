@@ -3,7 +3,8 @@
  * the classic fundraising RFM signals:
  *
  *   Recency   (max 50): time since last gift, relative to the donor's own cadence
- *   Frequency (max 25): number of gifts in the last 36 months
+ *   Frequency (max 25): giving consistency - of the last 3 years the donor could
+ *                       have given in, how many did they actually give in
  *   Monetary  (max 25): year-on-year giving trend
  *
  * Deliberately transparent rather than a trained model: a gift officer can see
@@ -15,13 +16,16 @@ public with sharing class LapseRiskScorer {
     public static final String BAND_HIGH = 'High';
     public static final String BAND_UNKNOWN = 'Unknown';
 
+    /** Beyond two years of silence a donor is considered lapsed whatever their cadence. */
+    public static final Integer LAPSED_AFTER_DAYS = 730;
+
     @TestVisible
     private static final Integer MEDIUM_THRESHOLD = 30;
     @TestVisible
     private static final Integer HIGH_THRESHOLD = 60;
-    /** Beyond two years of silence a donor is considered lapsed whatever their cadence. */
+    /** In the Low band, only factors at least this large are worth a "watch" note. */
     @TestVisible
-    private static final Integer LAPSED_AFTER_DAYS = 730;
+    private static final Integer WATCH_THRESHOLD = 10;
 
     public class Result {
         /** Null when there is no gift history to score. */
@@ -33,13 +37,18 @@ public with sharing class LapseRiskScorer {
         public Integer monetaryPoints = 0;
     }
 
-    /** A scored factor with its human-readable reason, so the explanation can lead with the biggest driver. */
+    /**
+     * A scored factor. `risk` explains the points when they are > 0; `strength` is the
+     * positive phrasing used for Low-band donors (null when there is nothing worth saying).
+     */
     private class Factor {
         Integer points;
-        String reason;
-        Factor(Integer points, String reason) {
+        String risk;
+        String strength;
+        Factor(Integer points, String risk, String strength) {
             this.points = points;
-            this.reason = reason;
+            this.risk = risk;
+            this.strength = strength;
         }
     }
 
@@ -51,16 +60,17 @@ public with sharing class LapseRiskScorer {
             return r;
         }
 
-        Factor recency = recencyFactor(summary);
-        Factor frequency = frequencyFactor(summary);
-        Factor monetary = monetaryFactor(summary);
-
-        r.recencyPoints = recency.points;
-        r.frequencyPoints = frequency.points;
-        r.monetaryPoints = monetary.points;
-        r.score = recency.points + frequency.points + monetary.points;
+        List<Factor> factors = new List<Factor>{
+            recencyFactor(summary),
+            frequencyFactor(summary),
+            monetaryFactor(summary)
+        };
+        r.recencyPoints = factors[0].points;
+        r.frequencyPoints = factors[1].points;
+        r.monetaryPoints = factors[2].points;
+        r.score = r.recencyPoints + r.frequencyPoints + r.monetaryPoints;
         r.band = bandFor(r.score);
-        r.explanation = explain(r.band, new List<Factor>{ recency, frequency, monetary });
+        r.explanation = r.band == BAND_LOW ? explainLow(factors) : explainRisk(r.band, factors);
         return r;
     }
 
@@ -74,111 +84,116 @@ public with sharing class LapseRiskScorer {
 
     private static Factor recencyFactor(GivingSummary s) {
         Integer days = s.daysSinceLastGift;
-        String reason = 'last gift ' + describeDays(days) + ' ago';
-        Integer points;
-
+        String lastGift = 'last gift ' + describeAgo(days);
         if (days > LAPSED_AFTER_DAYS) {
-            points = 50;
-        } else if (s.averageIntervalDays != null) {
-            // Cadence-aware: compare the silence with how often this donor normally gives.
-            reason += ' (usually gives every ' + describeDays(s.averageIntervalDays) + ')';
-            Decimal ratio = Decimal.valueOf(days) / s.averageIntervalDays;
-            if (ratio <= 1.25) {
-                points = 0;
-            } else if (ratio <= 1.5) {
-                points = 15;
-            } else if (ratio <= 2) {
-                points = 30;
-            } else if (ratio <= 3) {
-                points = 40;
-            } else {
-                points = 50;
-            }
-        } else {
-            // Single gift: no cadence yet, so fall back to absolute time.
-            if (days <= 180) {
-                points = 0;
-            } else if (days <= 365) {
-                points = 15;
-            } else if (days <= 540) {
-                points = 30;
-            } else {
-                points = 40;
-            }
+            return new Factor(50, lastGift, null);
         }
-        return new Factor(points, reason);
+        if (s.averageIntervalDays == null) {
+            // Single gift: no cadence yet, so fall back to absolute time.
+            Integer points = days <= 180 ? 0 : days <= 365 ? 15 : days <= 540 ? 30 : 40;
+            return new Factor(points, lastGift, lastGift);
+        }
+        // Cadence-aware: compare the silence with how often this donor normally gives.
+        String rhythm = ' (usually gives every ' + describeDuration(s.averageIntervalDays) + ')';
+        Decimal ratio = Decimal.valueOf(days) / s.averageIntervalDays;
+        Integer points = ratio <= 1.25 ? 0 : ratio <= 1.5 ? 15 : ratio <= 2 ? 30 : ratio <= 3 ? 40 : 50;
+        return new Factor(
+            points,
+            lastGift + rhythm,
+            lastGift + ', in line with their usual rhythm (every ' + describeDuration(s.averageIntervalDays) + ')'
+        );
     }
 
     private static Factor frequencyFactor(GivingSummary s) {
-        Integer n = s.giftsLast36Months;
-        Integer points;
-        if (n >= 6) {
-            points = 0;
-        } else if (n >= 3) {
-            points = 8;
-        } else if (n == 2) {
-            points = 15;
-        } else if (n == 1) {
-            points = 20;
-        } else {
-            points = 25;
+        Integer eligible = s.eligibleGivingYears;
+        Integer active = s.activeGivingYears;
+        if (active == 0) {
+            return new Factor(25, 'no gifts in the last 3 years', null);
         }
-        String reason = n == 0
-            ? 'no gifts in the last 3 years'
-            : 'only ' + n + (n == 1 ? ' gift' : ' gifts') + ' in the last 3 years';
-        return new Factor(points, reason);
+        Integer missed = eligible - active;
+        Integer points = missed == 0 ? 0 : missed == 1 ? 10 : 18;
+        String risk = 'gave in only ' + active + ' of the last ' + eligible + ' years';
+        // "Gave in each of the last 1 years" says nothing, so only praise multi-year consistency.
+        String strength = eligible >= 2 ? 'gave in each of the last ' + eligible + ' years' : null;
+        return new Factor(points, risk, strength);
     }
 
     private static Factor monetaryFactor(GivingSummary s) {
         switch on s.trend {
             when 'Increasing' {
-                return new Factor(0, 'giving up ' + s.trendPercent + '% year on year');
+                String text = 'giving up ' + s.trendPercent + '% year on year';
+                return new Factor(0, text, text);
             }
             when 'Stable' {
-                return new Factor(5, 'giving flat year on year');
+                return new Factor(5, 'giving flat year on year', 'giving steady year on year');
             }
             when 'New' {
-                return new Factor(5, 'giving only started in the last 12 months');
+                return new Factor(5, 'giving only started in the last 12 months', 'new donor this year');
             }
             when 'Declining' {
                 Integer points = s.trendPercent < -50 ? 25 : 15;
-                return new Factor(points, 'giving down ' + Math.abs(s.trendPercent) + '% year on year');
+                return new Factor(points, 'giving down ' + Math.abs(s.trendPercent) + '% year on year', null);
             }
             when else {
-                return new Factor(25, 'no gifts in the last 2 years');
+                return new Factor(25, 'no gifts in the last 2 years', null);
             }
         }
     }
 
-    /** "<Band>: <top reason>; <second reason>." using only factors that added risk. */
-    private static String explain(String band, List<Factor> factors) {
-        List<Factor> contributing = new List<Factor>();
-        for (Factor f : factors) {
-            if (f.points > 0) {
-                // Insertion sort by points, descending: at most three items.
-                Integer i = 0;
-                while (i < contributing.size() && contributing[i].points >= f.points) {
-                    i++;
-                }
-                if (i == contributing.size()) {
-                    contributing.add(f);
-                } else {
-                    contributing.add(i, f);
-                }
-            }
-        }
-        if (contributing.isEmpty()) {
-            return band + ': gives regularly, gave recently and giving is growing.';
-        }
+    /** Medium/High: "<Band>: <biggest risk>; <second risk>." */
+    private static String explainRisk(String band, List<Factor> factors) {
         List<String> reasons = new List<String>();
-        for (Integer i = 0; i < Math.min(2, contributing.size()); i++) {
-            reasons.add(contributing[i].reason);
+        for (Factor f : sortByPointsDesc(factors)) {
+            if (f.points > 0 && reasons.size() < 2) {
+                reasons.add(f.risk);
+            }
         }
         return band + ': ' + String.join(reasons, '; ') + '.';
     }
 
+    /**
+     * Low: lead with what is going well, then flag any single factor that is worth watching.
+     * Never empty: recency is either 0 (and always has a strength) or at least 15 (a watch item).
+     */
+    private static String explainLow(List<Factor> factors) {
+        List<String> parts = new List<String>();
+        for (Factor f : factors) {
+            if (f.points == 0 && f.strength != null) {
+                parts.add(f.strength);
+            }
+        }
+        for (Factor f : sortByPointsDesc(factors)) {
+            if (f.points >= WATCH_THRESHOLD) {
+                parts.add('watch: ' + f.risk);
+                break;
+            }
+        }
+        return BAND_LOW + ': ' + String.join(parts, '; ') + '.';
+    }
+
+    private static List<Factor> sortByPointsDesc(List<Factor> factors) {
+        List<Factor> sorted = new List<Factor>();
+        for (Factor f : factors) {
+            Integer i = 0;
+            while (i < sorted.size() && sorted[i].points >= f.points) {
+                i++;
+            }
+            if (i == sorted.size()) {
+                sorted.add(f);
+            } else {
+                sorted.add(i, f);
+            }
+        }
+        return sorted;
+    }
+
     @TestVisible
-    private static String describeDays(Integer days) {
+    private static String describeAgo(Integer days) {
+        return days == 0 ? 'today' : describeDuration(days) + ' ago';
+    }
+
+    /** Human-readable duration: "10 days", "3 weeks", "14 months". */
+    public static String describeDuration(Integer days) {
         if (days < 14) {
             return days + (days == 1 ? ' day' : ' days');
         }

@@ -6,6 +6,9 @@
  *   last 12 months  : (asOf - 12m, asOf]
  *   prior 12 months : (asOf - 24m, asOf - 12m]
  *   last 36 months  : (asOf - 36m, asOf]
+ *
+ * "Giving years" split the last 36 months into three 12-month windows. A window is
+ * eligible once the donor has started giving, and active if it holds at least one gift.
  */
 public with sharing class GivingSummary {
     public static final String TREND_INCREASING = 'Increasing';
@@ -40,6 +43,12 @@ public with sharing class GivingSummary {
     /** Typical days between gifts; null with fewer than two gifts. */
     public Integer averageIntervalDays { get; private set; }
     public Integer daysSinceLastGift { get; private set; }
+    /** True when the most recent gift was a recurring (monthly) payment. */
+    public Boolean lastGiftRecurring { get; private set; }
+    /** How many of the last three 12-month windows fall after the donor's first gift (0-3). */
+    public Integer eligibleGivingYears { get; private set; }
+    /** How many of those eligible windows contain at least one gift. */
+    public Integer activeGivingYears { get; private set; }
 
     public Boolean hasGifts() {
         return giftCount > 0;
@@ -53,6 +62,9 @@ public with sharing class GivingSummary {
         s.giftsLast36Months = 0;
         s.givingLast12Months = 0;
         s.givingPrior12Months = 0;
+        s.lastGiftRecurring = false;
+        s.eligibleGivingYears = 0;
+        s.activeGivingYears = 0;
 
         // Ignore incomplete records and anything dated after the as-of date.
         List<DonorGift> valid = new List<DonorGift>();
@@ -92,10 +104,29 @@ public with sharing class GivingSummary {
             s.lastGiftAmount = last.amount;
             s.daysSinceLastGift = last.giftDate.daysBetween(asOf);
             s.averageIntervalDays = recentAverageInterval(valid);
+            s.lastGiftRecurring = last.isRecurring();
+            s.countGivingYears(valid);
         }
 
         s.computeTrend();
         return s;
+    }
+
+    private void countGivingYears(List<DonorGift> sortedGifts) {
+        for (Integer i = 0; i < 3; i++) {
+            Date windowEnd = asOf.addMonths(-12 * i);
+            Date windowStart = asOf.addMonths(-12 * (i + 1));
+            if (firstGiftDate > windowEnd) {
+                continue; // the donor hadn't started giving yet, so this year can't count against them
+            }
+            eligibleGivingYears++;
+            for (DonorGift g : sortedGifts) {
+                if (g.giftDate > windowStart && g.giftDate <= windowEnd) {
+                    activeGivingYears++;
+                    break;
+                }
+            }
+        }
     }
 
     private void computeTrend() {
