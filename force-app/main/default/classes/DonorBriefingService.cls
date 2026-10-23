@@ -7,7 +7,7 @@
  *   - The LLM: turns these facts into prose. It never computes numbers itself.
  *
  * Gifts are Closed Won Opportunities whose primary Contact (Opportunity.ContactId)
- * is the donor. Amounts are in the org currency (CHF for Lakeside Community Trust).
+ * is the donor. Amounts are in the org currency (single-currency org).
  */
 public with sharing class DonorBriefingService {
     public class Request {

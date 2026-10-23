@@ -2,7 +2,7 @@
 
 > An Agentforce agent that prepares a major-gifts officer for a donor meeting in seconds.
 > Built for **Lakeside Community Trust**, a fictional Swiss nonprofit. All donors, gifts and notes are synthetic.
-> Amounts are in **CHF**.
+> Amounts are in the org currency (USD in the demo org).
 
 **Status:** 🚧 Phase 3 of 5 (data model, scoring service, demo data). Sections marked _TODO_ are filled in as each phase lands.
 
@@ -98,12 +98,12 @@ Medium/High explanations name the two biggest risk factors. Low explanations lea
 | 5 | Otherwise | Largest gift in last 3 years × risk multiplier |
 
 Risk multiplier: 1.5 Low (upgrade) / 1.2 Medium / 1.0 High (renewal), +0.1 if giving is increasing. Asks are capped by
-capacity rating on an annual basis (B ≤ CHF 100'000, C ≤ 25'000, D ≤ 5'000; monthly asks × 12) and rounded to a
+capacity rating on an annual basis (B ≤ 100,000, C ≤ 25,000, D ≤ 5,000 a year; monthly asks × 12) and rounded to a
 natural figure (finer steps for monthly amounts).
 
 **Calibrated against realistic data.** The first version passed every unit test, but on the generated donors it asked a
 declining donor for 2.7× their latest gift, penalised loyal annual donors for "only 3 gifts in 3 years", and gave
-monthly donors one-off asks of CHF 50. Unit tests prove the rules are implemented as written; only realistic data
+monthly donors one-off asks of 50. Unit tests prove the rules are implemented as written; only realistic data
 shows whether the rules themselves are any good.
 
 ## 5. Repository layout
@@ -130,8 +130,6 @@ Prerequisites: Salesforce CLI (`sf`) v2, a Developer Edition org with Agentforce
 enabled, and Python 3.10 or later.
 
 1. Clone the repo and authenticate: `sf org login web -a lakeside-dev`
-   - In Setup → Company Information, set **Currency Locale** to a Swiss locale (CHF).
-     The org is single-currency, so `Opportunity.Amount` is stored in CHF.
 2. Deploy metadata: `sf project deploy start -o lakeside-dev`
 3. Assign permission sets. Gift officers get `Lakeside_Gift_Officer`; whoever loads data also gets `Lakeside_Data_Admin`:
    `sf org assign permset -n Lakeside_Gift_Officer -n Lakeside_Data_Admin -o lakeside-dev`
@@ -161,7 +159,7 @@ the same "VLOOKUP" step as a Data Loader migration.
 _TODO: expand each into a short ADR-style entry._
 
 - **Standard objects over Nonprofit Cloud:** chosen because the target org has neither NPC nor Person Accounts.
-- **Single currency (CHF):** no multi-currency. Apex labels amounts with the org currency rather than hard-coding a symbol.
+- **Single currency:** no multi-currency. Apex labels amounts with the org currency (`UserInfo.getDefaultCurrency()`) rather than hard-coding a symbol, so the same code reads "USD 12,500" in the demo org and "CHF 12'500" in a Swiss one.
 - **Deterministic scoring in Apex, narrative in the LLM:** numbers must be auditable and testable.
 - **Compute on read vs stored roll-ups:** totals are calculated per request (2 SOQL queries for any batch size).
   There are no triggers and figures are never stale. At large data volumes (thousands of gifts per donor) you'd
@@ -183,7 +181,7 @@ _TODO: expand each into a short ADR-style entry._
   The data model stays standard and the import pipeline carries the extra step.
 - **Separate data-admin permission set:** loading data needs edit access to external IDs and capacity ratings, which
   gift officers shouldn't have. Two permission sets keep the officer persona least-privilege.
-- **Locale-independent formatting:** `CurrencyFormatter` renders `CHF 12'500` the same way for every user locale, so
+- **Locale-independent formatting:** `CurrencyFormatter` renders amounts the same way for every user locale (with the Swiss apostrophe separator for CHF), so
   test assertions and agent output are stable.
 
 ## 8. Testing

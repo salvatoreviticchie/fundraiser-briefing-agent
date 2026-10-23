@@ -3,7 +3,7 @@
     <fullName>Capacity_Rating__c</fullName>
     <label>Capacity Rating</label>
     <description>Estimated giving capacity band from prospect research. Used to cap the suggested ask amount.</description>
-    <inlineHelpText>A: CHF 100k+, B: CHF 25k-100k, C: CHF 5k-25k, D: under CHF 5k.</inlineHelpText>
+    <inlineHelpText>Annual giving capacity in org currency. A: 100k+, B: 25k-100k, C: 5k-25k, D: under 5k.</inlineHelpText>
     <type>Picklist</type>
     <required>false</required>
     <trackHistory>false</trackHistory>
@@ -11,10 +11,10 @@
         <restricted>true</restricted>
         <valueSetDefinition>
             <sorted>false</sorted>
-            <value><fullName>A</fullName><default>false</default><label>A (CHF 100k+)</label></value>
-            <value><fullName>B</fullName><default>false</default><label>B (CHF 25k-100k)</label></value>
-            <value><fullName>C</fullName><default>false</default><label>C (CHF 5k-25k)</label></value>
-            <value><fullName>D</fullName><default>false</default><label>D (under CHF 5k)</label></value>
+            <value><fullName>A</fullName><default>false</default><label>A (100k+)</label></value>
+            <value><fullName>B</fullName><default>false</default><label>B (25k-100k)</label></value>
+            <value><fullName>C</fullName><default>false</default><label>C (5k-25k)</label></value>
+            <value><fullName>D</fullName><default>false</default><label>D (under 5k)</label></value>
         </valueSetDefinition>
     </valueSet>
 </CustomField>

@@ -7,6 +7,8 @@
 #     (Account.Lakeside_Id__c, Contact__r.Lakeside_Id__c)
 #   - Opportunity.ContactId and Task.WhoId have no relationship name, so their
 #     Contact IDs are resolved after Contacts load (data-generator/resolve_ids.py)
+#   - Opportunity.ContactId is insert-only: re-runs must not move a gift to a different
+#     donor. Same seed = same data, so re-runs are safe; to change --seed, delete first.
 #
 # Usage: scripts/import-demo-data.sh [target-org-alias]
 # Prerequisite: the running user has the Lakeside_Data_Admin permission set.

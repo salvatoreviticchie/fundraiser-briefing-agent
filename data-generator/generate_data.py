@@ -98,6 +98,8 @@ HERO_DONORS = [
     {
         "first": "Eleanor", "last": "Hart", "preferred": "Dr Hart", "city": "Lucerne",
         "archetype": "growing_annual", "capacity": "B",
+        # (subject, days from as-of date: negative = overdue, priority)
+        "open_task": ("Bring Kriens site costings and named-fund options", 5, "High"),
         "notes": [
             ("Meeting", 70, "Lunch at the boathouse: literacy programme",
              "Eleanor was very moved by the reading-buddies story from the spring report. "
@@ -115,6 +117,7 @@ HERO_DONORS = [
     {
         "first": "Marco", "last": "Bernasconi", "preferred": "Marco", "city": "Lugano",
         "archetype": "lapsing_monthly", "capacity": "C",
+        "open_task": ("Chase updated card details for monthly gift", -30, "High"),
         "notes": [
             ("Event", 300, "Lake clean-up volunteer day",
              "Marco brought his two teenagers to the lake shore clean-up and stayed for the barbecue. "
@@ -127,6 +130,7 @@ HERO_DONORS = [
     {
         "first": "Claire", "last": "Rochat", "preferred": "Claire", "city": "Lausanne",
         "archetype": "lapsed", "capacity": "A",
+        "open_task": ("Send honest progress update on food bank cold-store", 3, "Normal"),
         "notes": [
             ("Meeting", 900, "Coffee: food bank expansion",
              "Claire gave the lead gift for the food bank cold-store. She was frustrated the opening "
@@ -287,7 +291,8 @@ def notes_for(donor: dict, as_of: date, rng: random.Random, next_id):
 
 
 def tasks_for(donor: dict, as_of: date, rng: random.Random, next_id):
-    """One completed touchpoint (last engagement) and sometimes an open follow-up."""
+    """One completed touchpoint (last engagement), sometimes an open follow-up,
+    plus a scripted follow-up for hero donors."""
     tasks = [{
         "Lakeside_Id__c": next_id("TK"),
         "Subject": rng.choice(["Thank-you call", "Stewardship visit", "Sent impact report"]),
@@ -306,11 +311,28 @@ def tasks_for(donor: dict, as_of: date, rng: random.Random, next_id):
                 "Follow up on matched-giving form",
                 "Invite to spring supporters' evening",
             ]),
-            "Who.Lakeside_Id__c": donor["id"],   # swapped for WhoId by resolve_ids.py
+            "Who.Lakeside_Id__c": donor["id"],
             "Status": "Not Started",
             "Priority": rng.choice(["High", "Normal"]),
             # Some open tasks are overdue (negative offset), which the agent should flag.
             "ActivityDate": (as_of + timedelta(days=rng.randint(-20, 30))).isoformat(),
+            "Description": "Logged by demo data generator.",
+        })
+
+    # Hero donors also get a scripted follow-up. Two rules keep this from disturbing other donors:
+    #   1. it uses no random numbers, so everyone else's data stays identical for a given seed
+    #   2. it has its own ID prefix ("TH"), so no other record's Lakeside_Id__c shifts
+    # Both matter because Opportunity.ContactId cannot be updated after insert: if a re-run moved
+    # gift GF-00042 to a different donor, the upsert would be rejected.
+    if donor.get("open_task"):
+        subject, days_from_now, priority = donor["open_task"]   # PY: tuple unpacking
+        tasks.append({
+            "Lakeside_Id__c": next_id("TH"),
+            "Subject": subject,
+            "Who.Lakeside_Id__c": donor["id"],
+            "Status": "Not Started",
+            "Priority": priority,
+            "ActivityDate": (as_of + timedelta(days=days_from_now)).isoformat(),
             "Description": "Logged by demo data generator.",
         })
     return tasks
