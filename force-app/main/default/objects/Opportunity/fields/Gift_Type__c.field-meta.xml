@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Gift_Type__c</fullName>
+    <label>Gift Type</label>
+    <description>Kind of gift this Opportunity represents. Closed Won Opportunities with a primary Contact are treated as received gifts.</description>
+    <type>Picklist</type>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <trackTrending>false</trackTrending>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>One_off</fullName><default>true</default><label>One-off</label></value>
+            <value><fullName>Recurring</fullName><default>false</default><label>Recurring</label></value>
+            <value><fullName>Grant</fullName><default>false</default><label>Grant</label></value>
+            <value><fullName>Pledge_Payment</fullName><default>false</default><label>Pledge Payment</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>

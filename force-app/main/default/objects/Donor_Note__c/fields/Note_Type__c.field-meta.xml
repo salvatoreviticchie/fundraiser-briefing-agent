@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Note_Type__c</fullName>
+    <label>Note Type</label>
+    <type>Picklist</type>
+    <required>false</required>
+    <trackHistory>false</trackHistory>
+    <valueSet>
+        <restricted>true</restricted>
+        <valueSetDefinition>
+            <sorted>false</sorted>
+            <value><fullName>Meeting</fullName><default>true</default><label>Meeting</label></value>
+            <value><fullName>Call</fullName><default>false</default><label>Call</label></value>
+            <value><fullName>Event</fullName><default>false</default><label>Event</label></value>
+            <value><fullName>Grant_Report</fullName><default>false</default><label>Grant Report</label></value>
+        </valueSetDefinition>
+    </valueSet>
+</CustomField>
