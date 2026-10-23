@@ -4,7 +4,7 @@
 > Built for **Lakeside Community Trust**, a fictional Swiss nonprofit. All donors, gifts and notes are synthetic.
 > Amounts are in the org currency (USD in the demo org).
 
-**Status:** 🚧 Phase 3 of 5 (data model, scoring service, demo data). Sections marked _TODO_ are filled in as each phase lands.
+**Status:** 🚧 Phase 4 of 5 (data model, scoring service, demo data, engagements flow, Data 360 retriever guide). Sections marked _TODO_ are filled in as each phase lands.
 
 ---
 
@@ -27,7 +27,7 @@ short, consistent briefing that answers all five. The numbers are computed in co
 | Section | Source | Computed by |
 | --- | --- | --- |
 | Giving history (total, last gift, frequency, trend) | Closed Won Opportunities | Apex `DonorBriefingService` |
-| Last engagement & open tasks | Task / Event | Flow action |
+| Last engagement & open tasks | Task | Flow `Get_Donor_Engagements` |
 | Lapse-risk score + one-line explanation | Gift history (RFM) | Apex `DonorBriefingService` |
 | Suggested ask amount + reasoning | Gift history + capacity rating | Apex `DonorBriefingService` |
 | Relevant context from notes | `Donor_Note__c` → Data 360 search index | Agentforce retriever |
@@ -40,10 +40,10 @@ _TODO (Phase 2+): finalise once components exist._
 flowchart LR
     U[Gift officer<br/>Agentforce panel] --> A[Agentforce agent<br/>Topic: Donor Meeting Prep]
     A -->|Apex action| S[DonorBriefingService<br/>@InvocableMethod]
-    A -->|Flow action| F[Get Open Engagements<br/>Autolaunched Flow]
+    A -->|Flow action| F[Get_Donor_Engagements<br/>Autolaunched Flow]
     A -->|Retriever| R[Data 360 Retriever]
     S --> O[(Contact / Account<br/>Opportunity)]
-    F --> T[(Task / Event)]
+    F --> T[(Task)]
     R --> I[Search Index<br/>chunked + vectorised]
     I --> D[(Donor_Note__c<br/>via CRM data stream)]
     G[Python data generator] -. CSV import .-> O
@@ -139,8 +139,14 @@ enabled, and Python 3.10 or later.
    scripts/import-demo-data.sh lakeside-dev         # Bulk API upserts, safe to re-run
    ```
    Remove it again with `sf apex run -o lakeside-dev -f scripts/apex/delete-demo-data.apex`.
-5. Configure the Data 360 retriever: see `docs/data-360-retriever-setup.md` (_TODO_)
+5. Configure the Data 360 retriever (manual Setup steps, about 20 minutes): see [`docs/data-360-retriever-setup.md`](docs/data-360-retriever-setup.md)
 6. Activate the agent and try: _"Prep me for my meeting with …"_
+
+### Engagements flow (`Get_Donor_Engagements`)
+
+An autolaunched flow takes `contactId` and returns `openTasksSummary` (one line per open task, overdue first and
+marked `OVERDUE`), `openTaskCount`, `overdueTaskCount`, `lastEngagementSubject` and `lastEngagementDate`
+(the most recent completed task).
 
 ### Demo data
 
@@ -181,6 +187,16 @@ _TODO: expand each into a short ADR-style entry._
   The data model stays standard and the import pipeline carries the extra step.
 - **Separate data-admin permission set:** loading data needs edit access to external IDs and capacity ratings, which
   gift officers shouldn't have. Two permission sets keep the officer persona least-privilege.
+- **Flow for engagements, Apex for scoring:** fetching and formatting tasks is simple record retrieval that an admin
+  might reasonably extend (add Events, filter by owner), so it's declarative. Scoring needs real logic and
+  boundary tests, so it's Apex. The flow runs `SystemModeWithSharing`: users only see tasks they can access, and
+  no FLS-sensitive fields are returned.
+- **Agent-ready outputs:** both actions return typed fields *and* a pre-formatted text block, so the agent can
+  quote facts without reformatting dates or recomputing counts.
+- **Stable demo data IDs:** `Opportunity.ContactId` can be set on insert but **not on update**, so a re-import that
+  moved a gift to a different donor is rejected. The generator keeps every `Lakeside_Id__c` stable for a given seed
+  (scripted hero tasks use their own `TH-` prefix and no random numbers). Changing `--seed` means deleting the
+  demo data first.
 - **Locale-independent formatting:** `CurrencyFormatter` renders amounts the same way for every user locale (with the Swiss apostrophe separator for CHF), so
   test assertions and agent output are stable.
 
@@ -193,10 +209,11 @@ sf apex run test -o lakeside-dev -l RunLocalTests -c -r human -w 10
 | Layer | Classes | What it proves |
 | --- | --- | --- |
 | Pure logic | `GivingSummaryTest`, `LapseRiskScorerTest`, `AskAmountCalculatorTest`, `CurrencyFormatterTest` | Every threshold and boundary, using in-memory gifts and a fixed as-of date (no DML, fast) |
+| Flow | `GetDonorEngagementsFlowTest` | Runs the flow through `Flow.Interview` exactly as the agent does: overdue ordering, completed vs open, no cross-donor leakage |
 | Integration | `DonorBriefingServiceTest` | Query filters (open opportunities excluded), mapping, error responses, bulk safety (100 requests → 2 queries), least-privilege access |
 
 `TestDataFactory` builds households, donors, gift series ("monthly for 2 years") and notes.
-Current result: **52 tests, 100% coverage** on all production classes.
+Current result: **54 tests, 100% coverage** on all production classes.
 
 ## 9. Limitations & next steps
 
