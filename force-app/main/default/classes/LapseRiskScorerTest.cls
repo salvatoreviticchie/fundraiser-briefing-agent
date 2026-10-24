@@ -143,7 +143,7 @@ private class LapseRiskScorerTest {
 
     @IsTest
     static void lowBandOmitsSmallRiskFactors() {
-        // Stable annual donor: monetary scores 5, which is below the watch threshold.
+        // Stable annual donor: monetary scores 5, which is below the monitor threshold.
         LapseRiskScorer.Result r = scoreOf(gifts(100, new List<Integer>{ 1, 13 }));
 
         Assert.areEqual(5, r.score);
@@ -154,19 +154,19 @@ private class LapseRiskScorerTest {
     }
 
     @IsTest
-    static void lowBandFlagsOneFactorWorthWatching() {
+    static void lowBandFlagsOneFactorWorthMonitoring() {
         LapseRiskScorer.Result declining = scoreOf(
             new List<DonorGift>{ new DonorGift(800, AS_OF.addMonths(-1)), new DonorGift(1000, AS_OF.addMonths(-13)) }
         );
         Assert.areEqual(LapseRiskScorer.BAND_LOW, declining.band, 'Score was ' + declining.score);
         Assert.areEqual(
-            'Low: last gift 4 weeks ago, in line with their usual rhythm (every 12 months); gave in each of the last 2 years; watch: giving down 20% year on year.',
+            'Low: last gift 4 weeks ago, in line with their usual rhythm (every 12 months); gave in each of the last 2 years; monitor: giving down 20% year on year.',
             declining.explanation
         );
 
         LapseRiskScorer.Result quiet = scoreOf(gifts(100, new List<Integer>{ 9 }));
         Assert.areEqual(LapseRiskScorer.BAND_LOW, quiet.band, 'Score was ' + quiet.score);
-        Assert.areEqual('Low: watch: last gift 9 months ago.', quiet.explanation);
+        Assert.areEqual('Low: monitor: last gift 9 months ago.', quiet.explanation);
     }
 
     @IsTest

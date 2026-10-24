@@ -23,9 +23,9 @@ public with sharing class LapseRiskScorer {
     private static final Integer MEDIUM_THRESHOLD = 30;
     @TestVisible
     private static final Integer HIGH_THRESHOLD = 60;
-    /** In the Low band, only factors at least this large are worth a "watch" note. */
+    /** In the Low band, only factors at least this large are worth a "monitor" note. */
     @TestVisible
-    private static final Integer WATCH_THRESHOLD = 10;
+    private static final Integer MONITOR_THRESHOLD = 10;
 
     public class Result {
         /** Null when there is no gift history to score. */
@@ -152,8 +152,8 @@ public with sharing class LapseRiskScorer {
     }
 
     /**
-     * Low: lead with what is going well, then flag any single factor that is worth watching.
-     * Never empty: recency is either 0 (and always has a strength) or at least 15 (a watch item).
+     * Low: lead with what is going well, then flag any single factor that is worth monitoring.
+     * Never empty: recency is either 0 (and always has a strength) or at least 15 (a monitor item).
      */
     private static String explainLow(List<Factor> factors) {
         List<String> parts = new List<String>();
@@ -163,8 +163,8 @@ public with sharing class LapseRiskScorer {
             }
         }
         for (Factor f : sortByPointsDesc(factors)) {
-            if (f.points >= WATCH_THRESHOLD) {
-                parts.add('watch: ' + f.risk);
+            if (f.points >= MONITOR_THRESHOLD) {
+                parts.add('monitor: ' + f.risk);
                 break;
             }
         }

@@ -125,7 +125,7 @@ The service only fetches data. The rules live in small pure classes that take a 
 | Monetary | 25 | Last 12 vs prior 12 months: Increasing → 0, Stable/New → 5, Declining → 15 (more than 50% drop → 25), Inactive → 25 |
 
 Medium/High explanations name the two biggest risk factors. Low explanations lead with what's going well, plus
-a `watch:` note for any single factor worth 10 points or more.
+a `monitor:` note for any single factor worth 10 points or more.
 
 **Suggested ask**: the first matching strategy wins.
 
